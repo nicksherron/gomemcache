@@ -87,9 +87,18 @@ func testWithClient(t *testing.T, c *Client) {
 	}
 	mustSet := mustSetF(t, c)
 
+	// Auth
+	c.SetAuth("user", []byte("password"))
+
+	// Get
+	_, err := c.Get("foo-miss")
+	if err != ErrCacheMiss {
+		t.Fatalf("get(foo-miss) [miss]: %v", err)
+	}
+
 	// Set
 	foo := &Item{Key: "foo", Value: []byte("fooval"), Flags: 123}
-	err := c.Set(foo)
+	err = c.Set(foo)
 	checkErr(err, "first set(foo): %v", err)
 	err = c.Set(foo)
 	checkErr(err, "second set(foo): %v", err)

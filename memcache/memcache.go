@@ -148,6 +148,9 @@ type Client struct {
 
 	lk       sync.Mutex
 	freeconn map[string][]*conn
+
+	username string
+	password []byte
 }
 
 // Item is an item to be got or stored in a memcached server.
@@ -289,7 +292,22 @@ func (c *Client) getConn(addr net.Addr) (*conn, error) {
 		c:    c,
 	}
 	cn.extendDeadline()
+	err = c.authenticate(cn)
+	if err != nil {
+		return nil, err
+	}
 	return cn, nil
+}
+
+func (c *Client) authenticate(cn *conn) error {
+	if len(c.username) == 0 {
+		return nil
+	}
+	authItem := Item{Key: c.username, Value: c.password}
+	if err := c.set(cn.rw, &authItem); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *Client) onItem(item *Item, fn func(*Client, *bufio.ReadWriter, *Item) error) error {
@@ -306,6 +324,14 @@ func (c *Client) onItem(item *Item, fn func(*Client, *bufio.ReadWriter, *Item) e
 		return err
 	}
 	return nil
+}
+
+// SetAuth sets the username and password to use for authenticating
+// with the servers managed by this client. All servers must currently
+// use the same username and password for authentication.
+func (c *Client) SetAuth(username string, password []byte) {
+	c.username = username
+	c.password = password
 }
 
 func (c *Client) FlushAll() error {
@@ -647,7 +673,7 @@ func (c *Client) DeleteAll() error {
 // memcached must be an decimal number, or an error will be returned.
 // On 64-bit overflow, the new value wraps around.
 func (c *Client) Increment(key string, delta uint64) (newValue uint64, err error) {
-	return c.incrDecr("incr", key, delta)
+	return c.incrDecr("increment", key, delta)
 }
 
 // Decrement atomically decrements key by delta. The return value is
@@ -657,7 +683,7 @@ func (c *Client) Increment(key string, delta uint64) (newValue uint64, err error
 // On underflow, the new value is capped at zero and does not wrap
 // around.
 func (c *Client) Decrement(key string, delta uint64) (newValue uint64, err error) {
-	return c.incrDecr("decr", key, delta)
+	return c.incrDecr("decrement", key, delta)
 }
 
 func (c *Client) incrDecr(verb, key string, delta uint64) (uint64, error) {
